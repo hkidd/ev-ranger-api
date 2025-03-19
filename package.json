@@ -1,11 +1,11 @@
 {
-  "name": "evranger-api",
+  "name": "ev-ranger-api",
   "version": "1.0.0",
   "description": "Backend API for EV Ranger",
   "main": "dist/server.js",
   "scripts": {
-    "start": "NODE_ENV=production node dist/server.js",
-    "dev": "NODE_ENV=development ts-node-dev --respawn --transpile-only src/server.ts",
+    "start": "node dist/server.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "vercel-build": "NODE_ENV=production npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
