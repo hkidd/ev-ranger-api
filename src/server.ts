@@ -21,8 +21,28 @@ console.log(`Running in ${env} mode`)
 const app = express()
 const port = process.env.PORT || 3001
 
+// CORS configuration - must come before other middleware
+const allowedOrigins = ['http://localhost:5173']
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL)
+}
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+    maxAge: 86400 // 24 hours
+  })
+)
+
 // Security middleware
-app.use(helmet())
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+  })
+)
 
 // Rate limiting
 const limiter = rateLimit({
@@ -30,28 +50,6 @@ const limiter = rateLimit({
   max: 100 // limit each IP to 100 requests per windowMs
 })
 app.use(limiter)
-
-// CORS configuration
-const allowedOrigins = process.env.FRONTEND_URL
-  ? [process.env.FRONTEND_URL]
-  : ['http://localhost:5173']
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true)
-      if (allowedOrigins.indexOf(origin) === -1) {
-        const msg =
-          'The CORS policy for this site does not allow access from the specified Origin.'
-        return callback(new Error(msg), false)
-      }
-      return callback(null, true)
-    },
-    methods: ['GET', 'POST'],
-    credentials: true,
-    maxAge: 86400 // 24 hours
-  })
-)
 
 app.use(express.json())
 
