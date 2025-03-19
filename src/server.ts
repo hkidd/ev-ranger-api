@@ -55,6 +55,22 @@ app.use(
 
 app.use(express.json())
 
+// Root route with API documentation
+app.get('/', (req, res) => {
+  res.json({
+    name: 'EV Ranger API',
+    version: '1.0.0',
+    status: 'operational',
+    endpoints: {
+      health: '/api/health',
+      geocoding: '/api/geocoding/search',
+      directions: '/api/directions',
+      chargingStations: '/api/charging-stations'
+    },
+    documentation: 'https://github.com/yourusername/evranger-api#readme'
+  })
+})
+
 // API Routes
 app.use('/api/health', healthRouter)
 app.use('/api/charging-stations', chargingStationsRouter)
