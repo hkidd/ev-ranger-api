@@ -55,16 +55,11 @@ app.use(
 
 app.use(express.json())
 
-// Routes
+// API Routes
+app.use('/api/health', healthRouter)
 app.use('/api/charging-stations', chargingStationsRouter)
 app.use('/api/geocoding', geocodingRouter)
 app.use('/api/directions', directionsRouter)
-app.use('/api/health', healthRouter)
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' })
-})
 
 // Error handling middleware
 app.use(
