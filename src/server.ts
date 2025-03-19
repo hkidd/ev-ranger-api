@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit'
 import { chargingStationsRouter } from './routes/chargingStations'
 import { geocodingRouter } from './routes/geocoding'
 import { directionsRouter } from './routes/directions'
+import { healthRouter } from './routes/health'
 import path from 'path'
 
 // Load environment variables based on NODE_ENV
@@ -58,6 +59,7 @@ app.use(express.json())
 app.use('/api/charging-stations', chargingStationsRouter)
 app.use('/api/geocoding', geocodingRouter)
 app.use('/api/directions', directionsRouter)
+app.use('/api/health', healthRouter)
 
 // Health check endpoint
 app.get('/health', (req, res) => {
