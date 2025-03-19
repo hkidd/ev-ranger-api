@@ -22,14 +22,19 @@ interface DirectionsRequest {
   end: [number, number]
 }
 
-interface RouteGeometry {
-  type: string
-  coordinates: [number, number][]
-}
-
-interface Route {
-  geometry: RouteGeometry
-  distance: number // in miles
+interface DirectionsResponse {
+  route: {
+    geometry: {
+      coordinates: [number, number][]
+      type: string
+    }
+    distance: number
+    duration: number
+  }
+  waypoints: {
+    location: [number, number]
+    name: string
+  }[]
 }
 
 router.post('/', (async (
@@ -37,16 +42,21 @@ router.post('/', (async (
   res: Response
 ) => {
   try {
-    const { start, end } = req.body as DirectionsRequest
+    const { start, end } = req.body
 
-    // Validate input
-    if (
-      !Array.isArray(start) ||
-      start.length !== 2 ||
-      !Array.isArray(end) ||
-      end.length !== 2
-    ) {
-      return res.status(400).json({ error: 'Invalid input parameters' })
+    // Validate input coordinates
+    if (!start || !end || !Array.isArray(start) || !Array.isArray(end)) {
+      return res.status(400).json({
+        error:
+          'Invalid coordinates. Please provide start and end coordinates as [longitude, latitude] arrays.'
+      })
+    }
+
+    if (start.length !== 2 || end.length !== 2) {
+      return res.status(400).json({
+        error:
+          'Invalid coordinate format. Each coordinate must be [longitude, latitude].'
+      })
     }
 
     // Construct the URL for the Mapbox Directions API
@@ -55,31 +65,62 @@ router.post('/', (async (
     )
 
     // Add required parameters
-    if (!mapboxgl.accessToken) {
-      throw new Error('Mapbox access token is not configured')
-    }
-    url.searchParams.append('access_token', mapboxgl.accessToken)
+    url.searchParams.append('access_token', mapboxgl.accessToken as string)
     url.searchParams.append('geometries', 'geojson')
+    url.searchParams.append('overview', 'full')
+    url.searchParams.append('steps', 'true')
 
     // Make the request
     const response = await fetch(url.toString())
 
     if (!response.ok) {
-      throw new Error(`Mapbox API Error: ${response.status}`)
+      const errorText = await response.text()
+      console.error('Error response body:', errorText)
+      return res.status(response.status).json({
+        error: `Mapbox API Error: ${response.status} - ${errorText}`
+      })
     }
 
     const data = await response.json()
 
-    // Transform the data to match our Route interface
-    const route: Route = {
-      geometry: data.routes[0].geometry,
-      distance: data.routes[0].distance * 0.000621371 // Convert meters to miles
+    // Validate the response data
+    if (
+      !data.routes ||
+      !Array.isArray(data.routes) ||
+      data.routes.length === 0
+    ) {
+      return res.status(404).json({
+        error: 'No route found between the specified coordinates.'
+      })
     }
 
-    res.json({ route })
+    const route = data.routes[0]
+    if (!route.geometry || !route.geometry.coordinates) {
+      return res.status(500).json({
+        error: 'Invalid route geometry received from Mapbox.'
+      })
+    }
+
+    // Transform the data to match our DirectionsResponse interface
+    const transformedData: DirectionsResponse = {
+      route: {
+        geometry: {
+          coordinates: route.geometry.coordinates,
+          type: route.geometry.type || 'LineString'
+        },
+        distance: route.distance || 0,
+        duration: route.duration || 0
+      },
+      waypoints: data.waypoints.map((waypoint: any) => ({
+        location: waypoint.location,
+        name: waypoint.name || ''
+      }))
+    }
+
+    res.json(transformedData)
   } catch (error) {
     console.error('Error getting route:', error)
-    res.status(500).json({ error: 'Failed to get route from Mapbox' })
+    res.status(500).json({ error: 'Failed to get route' })
   }
 }) as RequestHandler)
 
