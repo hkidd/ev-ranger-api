@@ -67,7 +67,7 @@ app.get('/', (req, res) => {
       directions: '/api/directions',
       chargingStations: '/api/charging-stations'
     },
-    documentation: 'https://github.com/yourusername/evranger-api#readme'
+    documentation: 'https://github.com/yourusername/ev-ranger-api#readme'
   })
 })
 
