@@ -7,6 +7,7 @@ import { chargingStationsRouter } from './routes/chargingStations'
 import { geocodingRouter } from './routes/geocoding'
 import { directionsRouter } from './routes/directions'
 import { healthRouter } from './routes/health'
+import tomtomRouter from './routes/tomtom'
 import path from 'path'
 
 // Load environment variables based on NODE_ENV
@@ -22,18 +23,20 @@ const app = express()
 const port = process.env.PORT || 3001
 
 // CORS configuration - must come before other middleware
-const allowedOrigins = ['http://localhost:5173']
+const allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173']
 if (process.env.FRONTEND_URL) {
   allowedOrigins.push(process.env.FRONTEND_URL)
 }
 
 app.use(
   cors({
-    origin: allowedOrigins,
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    origin: process.env.NODE_ENV === 'development' ? true : allowedOrigins,
+    methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     credentials: true,
-    maxAge: 86400 // 24 hours
+    maxAge: 86400, // 24 hours
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   })
 )
 
@@ -63,7 +66,12 @@ app.get('/', (req, res) => {
       health: '/api/health',
       geocoding: '/api/geocoding/search',
       directions: '/api/directions',
-      chargingStations: '/api/charging-stations'
+      chargingStations: '/api/charging-stations',
+      tomtom: {
+        reachableRange: '/api/tomtom/reachable-range',
+        evRoute: '/api/tomtom/ev-route',
+        chargingStations: '/api/tomtom/charging-stations'
+      }
     },
     documentation: 'https://github.com/yourusername/ev-ranger-api#readme'
   })
@@ -74,6 +82,7 @@ app.use('/api/health', healthRouter)
 app.use('/api/charging-stations', chargingStationsRouter)
 app.use('/api/geocoding', geocodingRouter)
 app.use('/api/directions', directionsRouter)
+app.use('/api/tomtom', tomtomRouter)
 
 // Error handling middleware
 app.use(
