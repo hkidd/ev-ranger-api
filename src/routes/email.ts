@@ -135,10 +135,6 @@ Timestamp: ${new Date().toISOString()}
         // Send email
         await transporter.sendMail(mailOptions)
 
-        console.log(
-            `Feedback email sent from ${email} (${name}) - ${type}: ${subject}`
-        )
-
         res.json({
             success: true,
             message: 'Feedback sent successfully'

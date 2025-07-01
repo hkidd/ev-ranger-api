@@ -297,7 +297,6 @@ router.post('/charging-stations', async (req, res) => {
                 const searchUrl = `${search.url}?${new URLSearchParams(
                     paramsObj
                 )}`
-                console.log('Trying search:', searchUrl)
 
                 const searchResponse = await fetch(searchUrl)
                 if (searchResponse.ok) {
@@ -313,7 +312,7 @@ router.post('/charging-stations', async (req, res) => {
                     })
                 }
             } catch (error) {
-                console.log('Search failed:', error)
+                console.error('Search failed:', error)
             }
         }
 
