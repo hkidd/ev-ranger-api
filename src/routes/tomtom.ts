@@ -162,7 +162,13 @@ router.post('/charging-stations', async (req, res) => {
             })
         }
 
-        const { latitude, longitude, radius = 50000, limit = 100, chargerType } = req.body
+        const {
+            latitude,
+            longitude,
+            radius = 50000,
+            limit = 100,
+            chargerType
+        } = req.body
 
         if (!latitude || !longitude) {
             return res.status(400).json({
@@ -170,17 +176,6 @@ router.post('/charging-stations', async (req, res) => {
                 message: 'latitude and longitude are required'
             })
         }
-
-        console.log('TomTom Search API request:', {
-            latitude,
-            longitude,
-            radius,
-            radiusKm: Math.round(radius / 1000),
-            radiusMiles: Math.round(radius / 1609.34),
-            limit,
-            chargerType,
-            apiType: 'Charger Type Specific Search'
-        })
 
         // Define searches based on charger type to get more targeted results
         let searches = []
@@ -287,19 +282,28 @@ router.post('/charging-stations', async (req, res) => {
             ]
         }
 
-        let allStations = []
+        let allStations: any[] = []
         const stationIds = new Set()
 
         for (const search of searches) {
             try {
-                const searchUrl = `${search.url}?${new URLSearchParams(search.params)}`
+                // Remove undefined properties from params to avoid TS error
+                const paramsObj: Record<string, string> = {}
+                for (const [k, v] of Object.entries(search.params)) {
+                    if (typeof v !== 'undefined') {
+                        paramsObj[k] = v
+                    }
+                }
+                const searchUrl = `${search.url}?${new URLSearchParams(
+                    paramsObj
+                )}`
                 console.log('Trying search:', searchUrl)
-                
+
                 const searchResponse = await fetch(searchUrl)
                 if (searchResponse.ok) {
                     const searchData = await searchResponse.json()
                     const stations = searchData.results || []
-                    
+
                     // Deduplicate stations by ID
                     stations.forEach((station: any) => {
                         if (!stationIds.has(station.id)) {
@@ -307,8 +311,6 @@ router.post('/charging-stations', async (req, res) => {
                             allStations.push(station)
                         }
                     })
-                    
-                    console.log(`Search returned ${stations.length} stations, total unique: ${allStations.length}`)
                 }
             } catch (error) {
                 console.log('Search failed:', error)
@@ -336,14 +338,6 @@ router.post('/charging-stations', async (req, res) => {
                 categories: station.poi?.categories || [],
                 source: 'tomtom'
             })) || []
-
-        console.log('TomTom Charger Type Search API response:', {
-            resultsCount: data.results?.length || 0,
-            totalResults: data.summary?.totalResults || 0,
-            chargerType: chargerType || 'all',
-            apiType: 'Charger Type Specific Search',
-            hasMoreResults: (data.summary?.totalResults || 0) > (data.results?.length || 0)
-        })
 
         res.json({
             success: true,
