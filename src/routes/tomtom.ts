@@ -355,4 +355,161 @@ router.post('/charging-stations', async (req, res) => {
     }
 })
 
+// TomTom POI Search API endpoint
+router.post('/pois', async (req, res) => {
+    try {
+        if (!TOMTOM_API_KEY) {
+            return res.status(500).json({
+                error: 'TomTom API key not configured',
+                message: 'TOMTOM_API_KEY environment variable is required'
+            })
+        }
+
+        const {
+            latitude,
+            longitude,
+            radius = 50000, // 50km default
+            limit = 100,
+            categories = ['9927'] // Default to natural/recreational areas (national parks)
+        } = req.body
+
+        if (!latitude || !longitude) {
+            return res.status(400).json({
+                error: 'Missing required parameters',
+                message: 'latitude and longitude are required'
+            })
+        }
+
+        // POI category mapping
+        const categoryMap: Record<string, string> = {
+            'parks': '9927',        // Natural/Recreational areas
+            'attractions': '9909',   // Tourist attractions  
+            'museums': '9902',      // Museums
+            'restaurants': '9376',  // Restaurants
+            'hotels': '9373',       // Hotels/Lodging
+            'scenic': '9927',       // Scenic areas (same as parks)
+            'camping': '9911'       // Camping/RV parks
+        }
+
+        let allPOIs: any[] = []
+        const poiIds = new Set()
+
+        // Search for each requested category
+        for (const category of categories) {
+            try {
+                const categoryCode = categoryMap[category] || category
+                
+                const params = {
+                    key: TOMTOM_API_KEY,
+                    lat: latitude.toString(),
+                    lon: longitude.toString(),
+                    radius: radius.toString(),
+                    limit: '100',
+                    categorySet: categoryCode,
+                    view: 'Unified'
+                }
+
+                const searchUrl = `${TOMTOM_BASE_URL}/search/2/categorySearch/${encodeURIComponent(category === 'parks' ? 'national park' : category)}.json?${new URLSearchParams(params)}`
+
+                const response = await fetch(searchUrl)
+                if (response.ok) {
+                    const data = await response.json()
+                    const pois = data.results || []
+
+                    // Deduplicate POIs by ID
+                    pois.forEach((poi: any) => {
+                        if (!poiIds.has(poi.id)) {
+                            poiIds.add(poi.id)
+                            allPOIs.push({
+                                ...poi,
+                                category: category
+                            })
+                        }
+                    })
+                }
+            } catch (error) {
+                console.error(`Failed to fetch ${category} POIs:`, error)
+            }
+        }
+
+        // Add specific text searches for each requested category
+        const specificSearches: { [key: string]: string[] } = {
+            'parks': ['national park', 'state park', 'national monument', 'national forest', 'regional park'],
+            'attractions': ['tourist attraction', 'landmark', 'scenic viewpoint', 'observation deck', 'visitor center'],
+            'museums': ['museum', 'art gallery', 'science center', 'history center', 'cultural center'],
+            'restaurants': ['restaurant', 'cafe', 'diner', 'food court', 'brewery'],
+            'hotels': ['hotel', 'motel', 'resort', 'inn', 'lodge'],
+            'camping': ['campground', 'rv park', 'camping', 'national forest campground', 'state park camping']
+        }
+
+        // Only search for categories that were requested
+        for (const category of categories) {
+            const searchTerms = specificSearches[category] || []
+            
+            for (const searchTerm of searchTerms) {
+                try {
+                    const params = {
+                        key: TOMTOM_API_KEY,
+                        lat: latitude.toString(),
+                        lon: longitude.toString(),
+                        radius: radius.toString(),
+                        limit: '50',  // Keep good limit for plenty of POIs
+                        view: 'Unified'
+                    }
+
+                    const searchUrl = `${TOMTOM_BASE_URL}/search/2/poiSearch/${encodeURIComponent(searchTerm)}.json?${new URLSearchParams(params)}`
+
+                    const response = await fetch(searchUrl)
+                    if (response.ok) {
+                        const data = await response.json()
+                        const pois = data.results || []
+
+                        pois.forEach((poi: any) => {
+                            if (!poiIds.has(poi.id)) {
+                                poiIds.add(poi.id)
+                                allPOIs.push({
+                                    ...poi,
+                                    category: category  // Assign the correct category based on search
+                                })
+                            }
+                        })
+                    }
+                } catch (error) {
+                    console.error(`Failed to search for ${searchTerm}:`, error)
+                }
+            }
+        }
+
+        // Transform POIs to consistent format
+        const transformedPOIs = allPOIs.map((poi: any) => ({
+            id: poi.id,
+            name: poi.poi?.name || 'Unknown POI',
+            category: poi.category,
+            address: poi.address?.freeformAddress || '',
+            latitude: poi.position?.lat,
+            longitude: poi.position?.lon,
+            distance: poi.dist,
+            phone: poi.poi?.phone || null,
+            url: poi.poi?.url || null,
+            categories: poi.poi?.categories || [],
+            source: 'tomtom'
+        }))
+
+        res.json({
+            success: true,
+            data: {
+                pois: transformedPOIs,
+                totalResults: transformedPOIs.length
+            },
+            source: 'tomtom'
+        })
+    } catch (error) {
+        console.error('TomTom POI search error:', error)
+        res.status(500).json({
+            error: 'Internal server error',
+            message: 'Failed to fetch POIs'
+        })
+    }
+})
+
 export default router
