@@ -162,7 +162,7 @@ router.post('/charging-stations', async (req, res) => {
             })
         }
 
-        const { latitude, longitude, radius = 50000, limit = 100 } = req.body
+        const { latitude, longitude, radius = 50000, limit = 100, chargerType } = req.body
 
         if (!latitude || !longitude) {
             return res.status(400).json({
@@ -171,27 +171,156 @@ router.post('/charging-stations', async (req, res) => {
             })
         }
 
-        const url = `${TOMTOM_BASE_URL}/search/2/categorySearch/electric%20vehicle%20station.json`
-        const params = new URLSearchParams({
-            key: TOMTOM_API_KEY,
-            lat: latitude.toString(),
-            lon: longitude.toString(),
-            radius: radius.toString(),
-            limit: limit.toString(),
-            categorySet: '7309'
+        console.log('TomTom Search API request:', {
+            latitude,
+            longitude,
+            radius,
+            radiusKm: Math.round(radius / 1000),
+            radiusMiles: Math.round(radius / 1609.34),
+            limit,
+            chargerType,
+            apiType: 'Charger Type Specific Search'
         })
 
-        const response = await fetch(`${url}?${params}`)
+        // Define searches based on charger type to get more targeted results
+        let searches = []
 
-        if (!response.ok) {
-            const errorData = await response.text()
-            return res.status(response.status).json({
-                error: 'TomTom API error',
-                message: errorData
-            })
+        if (chargerType === 'fast') {
+            searches = [
+                {
+                    url: `${TOMTOM_BASE_URL}/search/2/poiSearch/supercharger.json`,
+                    params: {
+                        key: TOMTOM_API_KEY,
+                        lat: latitude.toString(),
+                        lon: longitude.toString(),
+                        radius: radius.toString(),
+                        limit: '100',
+                        view: 'Unified'
+                    }
+                },
+                {
+                    url: `${TOMTOM_BASE_URL}/search/2/poiSearch/fast%20charging.json`,
+                    params: {
+                        key: TOMTOM_API_KEY,
+                        lat: latitude.toString(),
+                        lon: longitude.toString(),
+                        radius: radius.toString(),
+                        limit: '100',
+                        view: 'Unified'
+                    }
+                },
+                {
+                    url: `${TOMTOM_BASE_URL}/search/2/poiSearch/dc%20charging.json`,
+                    params: {
+                        key: TOMTOM_API_KEY,
+                        lat: latitude.toString(),
+                        lon: longitude.toString(),
+                        radius: radius.toString(),
+                        limit: '100',
+                        view: 'Unified'
+                    }
+                }
+            ]
+        } else if (chargerType === 'level2') {
+            searches = [
+                {
+                    url: `${TOMTOM_BASE_URL}/search/2/poiSearch/level%202%20charging.json`,
+                    params: {
+                        key: TOMTOM_API_KEY,
+                        lat: latitude.toString(),
+                        lon: longitude.toString(),
+                        radius: radius.toString(),
+                        limit: '100',
+                        view: 'Unified'
+                    }
+                },
+                {
+                    url: `${TOMTOM_BASE_URL}/search/2/poiSearch/destination%20charging.json`,
+                    params: {
+                        key: TOMTOM_API_KEY,
+                        lat: latitude.toString(),
+                        lon: longitude.toString(),
+                        radius: radius.toString(),
+                        limit: '100',
+                        view: 'Unified'
+                    }
+                },
+                {
+                    url: `${TOMTOM_BASE_URL}/search/2/categorySearch/electric%20vehicle%20station.json`,
+                    params: {
+                        key: TOMTOM_API_KEY,
+                        lat: latitude.toString(),
+                        lon: longitude.toString(),
+                        radius: radius.toString(),
+                        limit: '100',
+                        categorySet: '7309',
+                        view: 'Unified'
+                    }
+                }
+            ]
+        } else {
+            // Default: all charging stations (for level1 or general search)
+            searches = [
+                {
+                    url: `${TOMTOM_BASE_URL}/search/2/categorySearch/electric%20vehicle%20station.json`,
+                    params: {
+                        key: TOMTOM_API_KEY,
+                        lat: latitude.toString(),
+                        lon: longitude.toString(),
+                        radius: radius.toString(),
+                        limit: '100',
+                        categorySet: '7309',
+                        view: 'Unified'
+                    }
+                },
+                {
+                    url: `${TOMTOM_BASE_URL}/search/2/poiSearch/charging%20station.json`,
+                    params: {
+                        key: TOMTOM_API_KEY,
+                        lat: latitude.toString(),
+                        lon: longitude.toString(),
+                        radius: radius.toString(),
+                        limit: '100',
+                        view: 'Unified'
+                    }
+                }
+            ]
         }
 
-        const data = await response.json()
+        let allStations = []
+        const stationIds = new Set()
+
+        for (const search of searches) {
+            try {
+                const searchUrl = `${search.url}?${new URLSearchParams(search.params)}`
+                console.log('Trying search:', searchUrl)
+                
+                const searchResponse = await fetch(searchUrl)
+                if (searchResponse.ok) {
+                    const searchData = await searchResponse.json()
+                    const stations = searchData.results || []
+                    
+                    // Deduplicate stations by ID
+                    stations.forEach((station: any) => {
+                        if (!stationIds.has(station.id)) {
+                            stationIds.add(station.id)
+                            allStations.push(station)
+                        }
+                    })
+                    
+                    console.log(`Search returned ${stations.length} stations, total unique: ${allStations.length}`)
+                }
+            } catch (error) {
+                console.log('Search failed:', error)
+            }
+        }
+
+        const data = {
+            results: allStations,
+            summary: {
+                totalResults: allStations.length
+            }
+        }
 
         // Transform TomTom data to match existing charging station format
         const transformedStations =
@@ -207,6 +336,14 @@ router.post('/charging-stations', async (req, res) => {
                 categories: station.poi?.categories || [],
                 source: 'tomtom'
             })) || []
+
+        console.log('TomTom Charger Type Search API response:', {
+            resultsCount: data.results?.length || 0,
+            totalResults: data.summary?.totalResults || 0,
+            chargerType: chargerType || 'all',
+            apiType: 'Charger Type Specific Search',
+            hasMoreResults: (data.summary?.totalResults || 0) > (data.results?.length || 0)
+        })
 
         res.json({
             success: true,

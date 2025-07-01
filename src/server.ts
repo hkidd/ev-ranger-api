@@ -8,6 +8,7 @@ import { geocodingRouter } from './routes/geocoding'
 import { directionsRouter } from './routes/directions'
 import { healthRouter } from './routes/health'
 import tomtomRouter from './routes/tomtom'
+import { emailRouter } from './routes/email'
 import path from 'path'
 
 // Load environment variables based on NODE_ENV
@@ -71,6 +72,9 @@ app.get('/', (req, res) => {
         reachableRange: '/api/tomtom/reachable-range',
         evRoute: '/api/tomtom/ev-route',
         chargingStations: '/api/tomtom/charging-stations'
+      },
+      email: {
+        feedback: '/api/email/feedback'
       }
     },
     documentation: 'https://github.com/yourusername/ev-ranger-api#readme'
@@ -83,6 +87,7 @@ app.use('/api/charging-stations', chargingStationsRouter)
 app.use('/api/geocoding', geocodingRouter)
 app.use('/api/directions', directionsRouter)
 app.use('/api/tomtom', tomtomRouter)
+app.use('/api/email', emailRouter)
 
 // Error handling middleware
 app.use(
